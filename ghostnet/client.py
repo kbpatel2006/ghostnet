@@ -1,6 +1,15 @@
 import socket
 import threading
 
+from ghostnet.protocol import (
+    TYPE_ERROR,
+    TYPE_MESSAGE,
+    TYPE_REGISTER,
+    ProtocolError,
+    decode_packet,
+    encode_packet,
+)
+
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 9000
@@ -10,19 +19,37 @@ def receive_messages(client_socket):
     while True:
         try:
             data, _ = client_socket.recvfrom(4096)
-            message = data.decode("utf-8")
 
-            if message.startswith("MESSAGE:"):
-                payload = message.split(":", 1)[1]
+            packet = decode_packet(data)
 
-                print(f"\nReceived: {payload}")
-                print("> ", end="", flush=True)
+            if packet["type"] == TYPE_MESSAGE:
+                source = packet["source"]
+                payload = packet["payload"]
 
-            elif message.startswith("ERROR:"):
-                error = message.split(":", 1)[1]
+                print(
+                    f"\n{source}: {payload}"
+                )
+                print(
+                    "> ",
+                    end="",
+                    flush=True,
+                )
 
-                print(f"\nServer error: {error}")
-                print("> ", end="", flush=True)
+            elif packet["type"] == TYPE_ERROR:
+                print(
+                    f"\nServer error: "
+                    f"{packet['payload']}"
+                )
+                print(
+                    "> ",
+                    end="",
+                    flush=True,
+                )
+
+        except ProtocolError as exc:
+            print(
+                f"\nInvalid packet received: {exc}"
+            )
 
         except OSError:
             break
@@ -34,24 +61,45 @@ def main():
         socket.SOCK_DGRAM,
     )
 
-    client_name = input("Choose a ghostnet name: ").strip()
+    client_name = input(
+        "Choose a GhostNet name: "
+    ).strip()
 
-    registration_message = f"REGISTER:{client_name}"
-
-    client_socket.sendto(
-        registration_message.encode("utf-8"),
-        (SERVER_HOST, SERVER_PORT),
+    registration_packet = encode_packet(
+        packet_type=TYPE_REGISTER,
+        source=client_name,
     )
 
-    print(f"Registered as '{client_name}'")
+    client_socket.sendto(
+        registration_packet,
+        (
+            SERVER_HOST,
+            SERVER_PORT,
+        ),
+    )
+
+    print(
+        f"Registered as '{client_name}'"
+    )
+
     print()
-    print("Send messages using:")
-    print("destination:message")
+    print(
+        "Send messages using:"
+    )
+    print(
+        "destination:message"
+    )
     print()
-    print("Example:")
-    print("client2:hello")
+    print(
+        "Example:"
+    )
+    print(
+        "client2:hello"
+    )
     print()
-    print("Type 'exit' to quit.\n")
+    print(
+        "Type 'exit' to quit.\n"
+    )
 
     receiver_thread = threading.Thread(
         target=receive_messages,
@@ -68,16 +116,29 @@ def main():
             break
 
         if ":" not in user_input:
-            print("Use format: destination:message")
+            print(
+                "Use format: "
+                "destination:message"
+            )
             continue
 
-        destination, message = user_input.split(":", 1)
+        destination, message = (
+            user_input.split(":", 1)
+        )
 
-        packet = f"SEND:{destination}:{message}"
+        packet = encode_packet(
+            packet_type=TYPE_MESSAGE,
+            source=client_name,
+            destination=destination,
+            payload=message,
+        )
 
         client_socket.sendto(
-            packet.encode("utf-8"),
-            (SERVER_HOST, SERVER_PORT),
+            packet,
+            (
+                SERVER_HOST,
+                SERVER_PORT,
+            ),
         )
 
     client_socket.close()
