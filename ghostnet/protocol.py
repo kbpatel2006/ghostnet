@@ -6,6 +6,8 @@ PROTOCOL_VERSION = 1
 TYPE_REGISTER = "register"
 TYPE_MESSAGE = "message"
 TYPE_ERROR = "error"
+TYPE_HEARTBEAT = "heartbeat"
+TYPE_DISCONNECT = "disconnect"
 
 
 class ProtocolError(Exception):
@@ -37,6 +39,9 @@ def decode_packet(data):
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ProtocolError("Packet is not valid JSON") from exc
 
+    if not isinstance(packet, dict):
+        raise ProtocolError("Packet must be a JSON object")
+
     required_fields = {
         "version",
         "type",
@@ -61,6 +66,8 @@ def decode_packet(data):
         TYPE_REGISTER,
         TYPE_MESSAGE,
         TYPE_ERROR,
+        TYPE_HEARTBEAT,
+        TYPE_DISCONNECT,
     }
 
     if packet["type"] not in valid_types:
