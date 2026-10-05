@@ -38,6 +38,52 @@ def create_tap(interface_name="ghost0"):
     return tap, actual_name
 
 
+def format_mac(raw_mac):
+    return ":".join(
+        f"{byte:02x}"
+        for byte in raw_mac
+    )
+
+
+def parse_ethernet_frame(frame):
+    if len(frame) < 14:
+        raise ValueError(
+            "Ethernet frame is too short"
+        )
+
+    destination_mac = frame[0:6]
+    source_mac = frame[6:12]
+
+    ether_type = struct.unpack(
+        "!H",
+        frame[12:14],
+    )[0]
+
+    return {
+        "destination_mac": format_mac(
+            destination_mac
+        ),
+        "source_mac": format_mac(
+            source_mac
+        ),
+        "ether_type": ether_type,
+        "payload": frame[14:],
+    }
+
+
+def ether_type_name(ether_type):
+    known_types = {
+        0x0800: "IPv4",
+        0x0806: "ARP",
+        0x86DD: "IPv6",
+    }
+
+    return known_types.get(
+        ether_type,
+        "Unknown",
+    )
+
+
 def main():
     tap, interface_name = create_tap()
 
@@ -56,9 +102,37 @@ def main():
             65535,
         )
 
+        try:
+            parsed = parse_ethernet_frame(
+                frame
+            )
+
+        except ValueError as exc:
+            print(
+                f"[INVALID FRAME] {exc}"
+            )
+            continue
+
+        print()
         print(
-            f"Received Ethernet frame: "
+            f"Frame size: "
             f"{len(frame)} bytes"
+        )
+        print(
+            f"Source MAC: "
+            f"{parsed['source_mac']}"
+        )
+        print(
+            f"Destination MAC: "
+            f"{parsed['destination_mac']}"
+        )
+        print(
+            f"EtherType: "
+            f"0x{parsed['ether_type']:04x}"
+        )
+        print(
+            f"Protocol: "
+            f"{ether_type_name(parsed['ether_type'])}"
         )
 
 
