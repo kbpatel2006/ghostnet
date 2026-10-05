@@ -23,5 +23,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Compile Python sources
+        run: python -m compileall -q ghostnet tests
+
+      - name: Import core modules
+        run: python -c "import ghostnet.protocol, ghostnet.server, ghostnet.tap, ghostnet.tunnel"
+
       - name: Run tests
         run: python -m pytest -v
