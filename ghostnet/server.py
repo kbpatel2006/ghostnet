@@ -5,6 +5,7 @@ import time
 from ghostnet.protocol import (
     TYPE_DISCONNECT,
     TYPE_ERROR,
+    TYPE_FRAME,
     TYPE_HEARTBEAT,
     TYPE_MESSAGE,
     TYPE_REGISTER,
@@ -82,6 +83,17 @@ def disconnect_client(packet, address):
     print(f"[DISCONNECTED] {client_name}")
 
 
+def get_registered_source(source, address):
+    with clients_lock:
+        client = clients.get(source)
+
+        if client is None or client["address"] != address:
+            return None
+
+        client["last_seen"] = time.monotonic()
+        return client
+
+
 def handle_message(server_socket, packet, address):
     source = packet["source"]
     destination = packet["destination"]
@@ -97,29 +109,20 @@ def handle_message(server_socket, packet, address):
             "Message packet requires a destination"
         )
 
+    if get_registered_source(source, address) is None:
+        print(
+            f"[REJECTED] Invalid source '{source}' "
+            f"from {address}"
+        )
+        return
+
     with clients_lock:
-        source_client = clients.get(source)
-
-        if (
-            source_client is None
-            or source_client["address"] != address
-        ):
-            print(
-                f"[REJECTED] Invalid source '{source}' "
-                f"from {address}"
-            )
-            return
-
-        source_client["last_seen"] = time.monotonic()
-
         destination_client = clients.get(destination)
-
-        if destination_client:
-            destination_address = (
-                destination_client["address"]
-            )
-        else:
-            destination_address = None
+        destination_address = (
+            destination_client["address"]
+            if destination_client
+            else None
+        )
 
     if destination_address is None:
         error_packet = encode_packet(
@@ -133,7 +136,6 @@ def handle_message(server_socket, packet, address):
             error_packet,
             address,
         )
-
         return
 
     forwarded_packet = encode_packet(
@@ -149,8 +151,63 @@ def handle_message(server_socket, packet, address):
     )
 
     print(
-        f"[FORWARD] {source} → {destination}: "
+        f"[FORWARD] {source} -> {destination}: "
         f"{payload}"
+    )
+
+
+def handle_frame(server_socket, packet, address):
+    source = packet["source"]
+    destination = packet["destination"]
+    payload = packet["payload"]
+
+    if not source:
+        raise ProtocolError(
+            "Frame packet requires a source"
+        )
+
+    if not destination:
+        raise ProtocolError(
+            "Frame packet requires a destination"
+        )
+
+    if not isinstance(payload, str):
+        raise ProtocolError(
+            "Frame packet requires an encoded payload"
+        )
+
+    if get_registered_source(source, address) is None:
+        print(
+            f"[REJECTED FRAME] Invalid source "
+            f"'{source}' from {address}"
+        )
+        return
+
+    with clients_lock:
+        destination_client = clients.get(destination)
+        destination_address = (
+            destination_client["address"]
+            if destination_client
+            else None
+        )
+
+    if destination_address is None:
+        return
+
+    frame_packet = encode_packet(
+        packet_type=TYPE_FRAME,
+        source=source,
+        destination=destination,
+        payload=payload,
+    )
+
+    server_socket.sendto(
+        frame_packet,
+        destination_address,
+    )
+
+    print(
+        f"[FRAME] {source} -> {destination}"
     )
 
 
@@ -194,11 +251,10 @@ def main():
         target=cleanup_clients,
         daemon=True,
     )
-
     cleanup_thread.start()
 
     while True:
-        data, address = server_socket.recvfrom(4096)
+        data, address = server_socket.recvfrom(65535)
 
         try:
             packet = decode_packet(data)
@@ -224,6 +280,13 @@ def main():
 
             elif packet["type"] == TYPE_DISCONNECT:
                 disconnect_client(
+                    packet,
+                    address,
+                )
+
+            elif packet["type"] == TYPE_FRAME:
+                handle_frame(
+                    server_socket,
                     packet,
                     address,
                 )
