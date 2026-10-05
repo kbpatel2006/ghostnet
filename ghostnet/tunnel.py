@@ -15,7 +15,6 @@ from ghostnet.protocol import (
 from ghostnet.tap import create_tap
 
 
-SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 9000
 
 
@@ -54,6 +53,10 @@ def receive_packets(client_socket, tap_fd):
 
 
 def main():
+    server_host = input(
+    "GhostNet server address: "
+    ).strip()
+
     client_socket = socket.socket(
         socket.AF_INET,
         socket.SOCK_DGRAM,
@@ -79,7 +82,7 @@ def main():
     client_socket.sendto(
         registration,
         (
-            SERVER_HOST,
+            server_host,
             SERVER_PORT,
         ),
     )
@@ -129,7 +132,7 @@ def main():
         client_socket.sendto(
             packet,
             (
-                SERVER_HOST,
+                server_host,
                 SERVER_PORT,
             ),
         )
