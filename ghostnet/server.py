@@ -8,6 +8,7 @@ from ghostnet.protocol import (
     TYPE_HEARTBEAT,
     TYPE_MESSAGE,
     TYPE_REGISTER,
+    TYPE_FRAME,
     ProtocolError,
     decode_packet,
     encode_packet,
@@ -175,6 +176,60 @@ def cleanup_clients():
             print(
                 f"[TIMEOUT] Removed inactive client: {name}"
             )
+def handle_frame(server_socket, packet, address):
+    source = packet["source"]
+    destination = packet["destination"]
+    payload = packet["payload"]
+
+    if not source:
+        raise ProtocolError(
+            "Frame packet requires a source"
+        )
+
+    if not destination:
+        raise ProtocolError(
+            "Frame packet requires a destination"
+        )
+
+    with clients_lock:
+        source_client = clients.get(source)
+
+        if (
+            source_client is None
+            or source_client["address"] != address
+        ):
+            print(
+                f"[REJECTED FRAME] Invalid source "
+                f"'{source}' from {address}"
+            )
+            return
+
+        source_client["last_seen"] = time.monotonic()
+
+        destination_client = clients.get(destination)
+
+        if destination_client is None:
+            return
+
+        destination_address = (
+            destination_client["address"]
+        )
+
+    frame_packet = encode_packet(
+        packet_type=TYPE_FRAME,
+        source=source,
+        destination=destination,
+        payload=payload,
+    )
+
+    server_socket.sendto(
+        frame_packet,
+        destination_address,
+    )
+
+    print(
+        f"[FRAME] {source} → {destination}"
+    )
 
 
 def main():
@@ -224,6 +279,13 @@ def main():
 
             elif packet["type"] == TYPE_DISCONNECT:
                 disconnect_client(
+                    packet,
+                    address,
+                )
+
+            elif packet["type"] == TYPE_FRAME:
+                handle_frame(
+                    server_socket,
                     packet,
                     address,
                 )

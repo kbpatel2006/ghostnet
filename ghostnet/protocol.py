@@ -1,4 +1,5 @@
 import json
+import base64
 
 
 PROTOCOL_VERSION = 1
@@ -8,6 +9,7 @@ TYPE_MESSAGE = "message"
 TYPE_ERROR = "error"
 TYPE_HEARTBEAT = "heartbeat"
 TYPE_DISCONNECT = "disconnect"
+TYPE_FRAME = "frame"
 
 
 class ProtocolError(Exception):
@@ -68,6 +70,7 @@ def decode_packet(data):
         TYPE_ERROR,
         TYPE_HEARTBEAT,
         TYPE_DISCONNECT,
+        TYPE_FRAME
     }
 
     if packet["type"] not in valid_types:
@@ -76,3 +79,18 @@ def decode_packet(data):
         )
 
     return packet
+
+def encode_frame(frame):
+    return base64.b64encode(frame).decode("ascii")
+
+
+def decode_frame(encoded_frame):
+    try:
+        return base64.b64decode(
+            encoded_frame,
+            validate=True,
+        )
+    except Exception as exc:
+        raise ProtocolError(
+            "Invalid frame encoding"
+        ) from exc

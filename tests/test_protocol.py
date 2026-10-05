@@ -7,6 +7,8 @@ from ghostnet.protocol import (
     ProtocolError,
     decode_packet,
     encode_packet,
+    decode_frame,
+    encode_frame,
 )
 
 
@@ -89,3 +91,16 @@ def test_unknown_packet_type():
 
     with pytest.raises(ProtocolError):
         decode_packet(data)
+
+def test_frame_encoding_round_trip():
+    original = b"\xff\xff\xff\xff\xff\xffhello"
+
+    encoded = encode_frame(
+        original
+    )
+
+    decoded = decode_frame(
+        encoded
+    )
+
+    assert decoded == original
