@@ -19,7 +19,7 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 9000
 
 
-def receive_packets(client_socket):
+def receive_packets(client_socket, tap_fd):
     while True:
         try:
             data, _ = client_socket.recvfrom(65535)
@@ -31,6 +31,11 @@ def receive_packets(client_socket):
 
             frame = decode_frame(
                 packet["payload"]
+            )
+
+            os.write(
+                tap_fd,
+                frame,
             )
 
             print(
@@ -62,6 +67,10 @@ def main():
         "Destination node: "
     ).strip()
 
+    interface_name_input = input(
+        "TAP interface name: "
+    ).strip()
+
     registration = encode_packet(
         packet_type=TYPE_REGISTER,
         source=client_name,
@@ -75,10 +84,6 @@ def main():
         ),
     )
 
-    interface_name_input = input(
-        "TAP interface name: "
-    ).strip()
-
     tap_fd, interface_name = create_tap(
         interface_name_input
     )
@@ -90,7 +95,10 @@ def main():
 
     receiver_thread = threading.Thread(
         target=receive_packets,
-        args=(client_socket,),
+        args=(
+            client_socket,
+            tap_fd,
+        ),
         daemon=True,
     )
 
