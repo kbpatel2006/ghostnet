@@ -1,3 +1,5 @@
+import base64
+import binascii
 import json
 
 
@@ -8,11 +10,12 @@ TYPE_MESSAGE = "message"
 TYPE_ERROR = "error"
 TYPE_HEARTBEAT = "heartbeat"
 TYPE_DISCONNECT = "disconnect"
+TYPE_FRAME = "frame"
 
 
 class ProtocolError(Exception):
     """Raised when a GhostNet packet is invalid."""
-    pass
+
 
 
 def encode_packet(
@@ -35,7 +38,6 @@ def encode_packet(
 def decode_packet(data):
     try:
         packet = json.loads(data.decode("utf-8"))
-
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ProtocolError("Packet is not valid JSON") from exc
 
@@ -68,6 +70,7 @@ def decode_packet(data):
         TYPE_ERROR,
         TYPE_HEARTBEAT,
         TYPE_DISCONNECT,
+        TYPE_FRAME,
     }
 
     if packet["type"] not in valid_types:
@@ -76,3 +79,25 @@ def decode_packet(data):
         )
 
     return packet
+
+
+def encode_frame(frame):
+    if not isinstance(frame, bytes):
+        raise ProtocolError("Frame must be bytes")
+
+    return base64.b64encode(frame).decode("ascii")
+
+
+def decode_frame(encoded_frame):
+    if not isinstance(encoded_frame, str):
+        raise ProtocolError("Encoded frame must be a string")
+
+    try:
+        return base64.b64decode(
+            encoded_frame,
+            validate=True,
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise ProtocolError(
+            "Invalid frame encoding"
+        ) from exc
